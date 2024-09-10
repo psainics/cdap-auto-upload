@@ -3,13 +3,15 @@
 import os
 import sys
 import subprocess
+import argparse
 
 # Configs
 CDAP_URL = "http://127.0.0.1:11015"
 OFFLINE_MODE = True  # Use cached dependencies
+DEFAULT_NAMESPACE = "default"
 
 
-def upload_to_cdap(target_dir) -> bool:
+def upload_to_cdap(target_dir, namespace) -> bool:
     print("Locating target files")
     jar_files = [file for file in os.listdir(target_dir) if file.endswith(".jar")][:1]
     json_files = [file for file in os.listdir(target_dir) if file.endswith(".json")][:1]
@@ -22,8 +24,8 @@ def upload_to_cdap(target_dir) -> bool:
 
     print("Uploading to CDAP")
     os.chdir(target_dir)
-    return subprocess.call(["cdap", "cli", "-l", CDAP_URL, "load", "artifact", jar_file, "config-file",
-                            json_file]) == 0  # cdap cli always returns 0
+    return subprocess.call(["cdap", "cli", "-l", CDAP_URL, "--namespace", namespace,
+                            "load", "artifact", jar_file, "config-file", json_file]) == 0  # cdap cli always returns 0
 
 
 def build_project(work_dir: str) -> bool:
@@ -49,15 +51,20 @@ def main():
     current_dir = os.getcwd()
     target_dir = os.path.join(current_dir, "target")
     
-    if len(sys.argv) > 1 and sys.argv[1] == "-u":
+    parser = argparse.ArgumentParser(description="Build and upload project.")
+    parser.add_argument("-u", "--upload", action="store_true", help="Only trigger upload")
+    parser.add_argument("-n", "--namespace", type=str, default=DEFAULT_NAMESPACE, help="Specify namespace")
+    args = parser.parse_args()
+    
+    if args.upload:
         print("Uploading to CDAP")
-        if not upload_to_cdap(target_dir):
+        if not upload_to_cdap(target_dir, args.namespace):
             print("Upload failed")
             sys.exit(1)
         return
     
     
-    if not (build_project(current_dir) and upload_to_cdap(target_dir)):
+    if not (build_project(current_dir) and upload_to_cdap(target_dir, args.namespace)):
         print("Build or Upload failed")
         sys.exit(1)
 
